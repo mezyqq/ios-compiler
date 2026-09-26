@@ -60,5 +60,8 @@ ioscc_ld(20, ld);
 | `make-toolchain.sh` | `out/toolchain`: заголовки clang, SDK без Swift и лишнего, `availability.c` из ipab |
 | `Makefile` | `out/libioscc.a` и `make toolchain` |
 
-LLVM — Apache License 2.0 with LLVM Exceptions. iOS SDK в репозиторий не входит: он берётся из установленного
-ipab и попадает только в собранное приложение.
+## Лицензия
+
+ios-compiler распространяется по GNU General Public License v3.0 — см. [LICENSE](LICENSE). Сам LLVM — Apache
+License 2.0 with LLVM Exceptions. iOS SDK в репозиторий не входит: он берётся из установленного ipab и попадает
+только в собранное приложение.
