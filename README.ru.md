@@ -45,6 +45,16 @@ ioscc_ld(20, ld);
   его нельзя вызывать до перезапуска процесса (`ioscc_ld` вернёт 125).
 - `toolchain/rt/availability.c` нужно скомпилировать и слинковать, если код использует `@available`.
 
+Помощники для редактора и JIT (всё в `ioscc.h`):
+
+- `ioscc_check` — диагностика clang для несохранённого текста (`path:line:col: error: …`), `ioscc_complete` —
+  автодополнение в строке/столбце (через таб: вид, имя, вставка с `<#заглушками#>`, подпись, тип результата),
+  `ioscc_format` — clang-format со стилем из YAML `.clang-format` или стилем по умолчанию (табы).
+- `ioscc_jit_load` / `ioscc_jit_lookup` / `ioscc_jit_main` / `ioscc_jit_call` — линковка объектных файлов прямо
+  в текущий процесс (ORC JITLink) и запуск; `exit`/`abort`/падения возвращают управление, а не закрывают приложение.
+  Селекторы и классы Objective-C регистрируются (без категорий и `+load`), статические конструкторы вызываются.
+  Нужен JIT (`ioscc_jit_enabled` проверяет `CS_DEBUGGED`); символы ищутся в самом процессе.
+
 ## Ограничения
 
 - Только C, Objective-C, C++ (и их смеси). Swift на телефоне не компилируется.
@@ -56,7 +66,7 @@ ioscc_ld(20, ld);
 | | |
 |---|---|
 | `build-llvm.sh` | скачивает LLVM 22.1.8, собирает нативные tblgen и кросс-собирает clang/lld под iOS |
-| `ioscc.h`, `ioscc.cpp` | C-API: `ioscc_cc`, `ioscc_ld`, `ioscc_version` |
+| `ioscc.h`, `ioscc.cpp` | C-API: `ioscc_cc`, `ioscc_ld`, `ioscc_version`, помощники редактора (`ioscc_check`, `ioscc_complete`, `ioscc_format`), JIT (`ioscc_jit_*`) |
 | `make-toolchain.sh` | `out/toolchain`: заголовки clang, SDK без Swift и лишнего, `availability.c` из ipab |
 | `Makefile` | `out/libioscc.a` и `make toolchain` |
 

@@ -45,6 +45,16 @@ ioscc_ld(20, ld);
   be called again until the process restarts (`ioscc_ld` returns 125).
 - Compile and link `toolchain/rt/availability.c` if the code uses `@available`.
 
+Editor and JIT helpers (all in `ioscc.h`):
+
+- `ioscc_check` — clang diagnostics for unsaved text (`path:line:col: error: …`), `ioscc_complete` — code completion
+  at a line/column (tab-separated: kind, name, insertion with `<#placeholders#>`, signature, result type),
+  `ioscc_format` — clang-format with a `.clang-format` YAML or the default style (tabs).
+- `ioscc_jit_load` / `ioscc_jit_lookup` / `ioscc_jit_main` / `ioscc_jit_call` — link object files into the current
+  process with ORC JITLink and run them; `exit`/`abort`/crashes return to the caller instead of killing the app.
+  Objective-C selectors and classes are registered (no categories, no `+load`), static constructors run.
+  Needs JIT (`ioscc_jit_enabled` checks `CS_DEBUGGED`); symbols are resolved from the host process.
+
 ## Limitations
 
 - C, Objective-C, C++ (and mixes) only. Swift is not compiled on the phone.
@@ -56,7 +66,7 @@ ioscc_ld(20, ld);
 | | |
 |---|---|
 | `build-llvm.sh` | downloads LLVM 22.1.8, builds native tblgen, cross-builds clang/lld for iOS |
-| `ioscc.h`, `ioscc.cpp` | C API: `ioscc_cc`, `ioscc_ld`, `ioscc_version` |
+| `ioscc.h`, `ioscc.cpp` | C API: `ioscc_cc`, `ioscc_ld`, `ioscc_version`, editor helpers (`ioscc_check`, `ioscc_complete`, `ioscc_format`), JIT (`ioscc_jit_*`) |
 | `make-toolchain.sh` | `out/toolchain`: clang headers, the SDK without Swift and extras, `availability.c` from ipab |
 | `Makefile` | `out/libioscc.a` and `make toolchain` |
 
