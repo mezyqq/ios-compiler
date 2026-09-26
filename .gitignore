@@ -1,0 +1,6 @@
+llvm-src/
+llvm-native/
+llvm-ios-build/
+out/
+build.log
+llvm.tar.xz
