@@ -1,62 +1,64 @@
-# ios-compiler — clang и lld, работающие на самом iPhone
+**English** · [Русский](README.ru.md)
 
-Компилятор C / Objective-C / C++ для iOS, который запускается **на iOS** внутри приложения: LLVM 22 (clang + lld,
-только AArch64) собирается статическими библиотеками под `arm64-apple-ios`, а тонкая обёртка `ioscc` вызывает
-clang-драйвер и `lld::macho` прямо в процессе, без `fork`/`exec` (на iOS их нет). Получается обычный Mach-O
-с ad-hoc подписью — из него можно собрать `.ipa`.
+# ios-compiler — clang and lld running on the iPhone itself
 
-Используется в Forge (IDE для iPhone). Собирается на Linux вместе с
-[ipab](https://github.com/mezyqq/ios-compiler-for-linux) — оттуда берётся iOS SDK.
+A C / Objective-C / C++ compiler for iOS that runs **on iOS** inside an app: LLVM 22 (clang + lld, AArch64 only)
+is built as static libraries for `arm64-apple-ios`, and a thin wrapper, `ioscc`, calls the clang driver and
+`lld::macho` in-process, with no `fork`/`exec` (iOS has neither). The output is a regular ad-hoc signed Mach-O,
+ready to be packed into an `.ipa`.
 
-## Сборка
+Used by Forge (an IDE for iPhone). Built on Linux together with
+[ipab](https://github.com/mezyqq/ios-compiler-for-linux), which provides the iOS SDK.
+
+## Building
 
 ```sh
-# нужен установленный ipab (./setup.sh в нём) — путь задаёт IPAB_HOME, по умолчанию ~/ios-compiler-for-linux
-./build-llvm.sh > build.log 2>&1   # LLVM: ~40 мин нативные инструменты + ~1–2 ч кросс-сборка (J=4 потока)
-make                               # out/libioscc.a — обёртка
-make toolchain                     # out/toolchain — заголовки clang + урезанный SDK (~160 МБ, ~25 МБ в .ipa)
+# requires an installed ipab (./setup.sh in it) — path in IPAB_HOME, default ~/ios-compiler-for-linux
+./build-llvm.sh > build.log 2>&1   # LLVM: ~40 min native tools + ~1–2 h cross build (J=4 jobs)
+make                               # out/libioscc.a — the wrapper
+make toolchain                     # out/toolchain — clang headers + trimmed SDK (~160 MB, ~25 MB inside an .ipa)
 ```
 
-`build-llvm.sh` можно прерывать: повторный запуск продолжает с места остановки.
+`build-llvm.sh` can be interrupted: running it again continues where it stopped.
 
-## Подключение к приложению
+## Using it in an app
 
-Слинковать `out/libioscc.a`, все `llvm-ios-build/lib/*.a` и `-lc++`; положить `out/toolchain` в бандл.
+Link `out/libioscc.a`, all of `llvm-ios-build/lib/*.a` and `-lc++`; put `out/toolchain` into the app bundle.
 
 ```c
 #include "ioscc.h"
-// компиляция: как clang, но только -c (линковку делает ioscc_ld)
-const char *cc[] = { "<бандл>/toolchain/bin/clang", "-target", "arm64-apple-ios16.0",
-                     "-isysroot", "<бандл>/toolchain/sdk", "-fobjc-arc", "-c", "main.m", "-o", "main.o" };
+// compile: like clang, but -c only (ioscc_ld does the linking)
+const char *cc[] = { "<bundle>/toolchain/bin/clang", "-target", "arm64-apple-ios16.0",
+                     "-isysroot", "<bundle>/toolchain/sdk", "-fobjc-arc", "-c", "main.m", "-o", "main.o" };
 ioscc_cc(10, cc);
-// линковка: как ld64.lld
+// link: like ld64.lld
 const char *ld[] = { "ld", "-arch", "arm64", "-platform_version", "ios", "16.0", "26.5",
-                     "-syslibroot", "<бандл>/toolchain/sdk", "-adhoc_codesign", "-o", "App",
+                     "-syslibroot", "<bundle>/toolchain/sdk", "-adhoc_codesign", "-o", "App",
                      "main.o", "availability.o", "-framework", "UIKit", "-framework", "Foundation",
                      "-lSystem", "-lobjc" };
 ioscc_ld(20, ld);
 ```
 
-- `argv[0]` у `ioscc_cc` — путь «к clang» в тулчейне: от него clang находит свои заголовки (`../lib/clang/22/include`).
-- Диагностика идёт в stderr. Вызывать по одному, на потоке со стеком от 8 МБ.
-- Падение cc1 или lld перехватывается `CrashRecoveryContext` и возвращается ошибкой. После падения lld
-  его нельзя вызывать до перезапуска процесса (`ioscc_ld` вернёт 125).
-- `toolchain/rt/availability.c` нужно скомпилировать и слинковать, если код использует `@available`.
+- `argv[0]` of `ioscc_cc` is the path "to clang" inside the toolchain: clang finds its headers relative to it (`../lib/clang/22/include`).
+- Diagnostics go to stderr. Call one at a time, on a thread with at least an 8 MB stack.
+- A crash in cc1 or lld is caught by `CrashRecoveryContext` and returned as an error. After an lld crash it cannot
+  be called again until the process restarts (`ioscc_ld` returns 125).
+- Compile and link `toolchain/rt/availability.c` if the code uses `@available`.
 
-## Ограничения
+## Limitations
 
-- Только C, Objective-C, C++ (и их смеси). Swift на телефоне не компилируется.
-- Нет ассемблера для `.s` (встроенный ассемблер для inline asm в C работает).
-- Нет `actool`/`ibtool`: без `.xcassets`, `.storyboard`, `.xib`.
+- C, Objective-C, C++ (and mixes) only. Swift is not compiled on the phone.
+- No assembler for `.s` files (the integrated assembler for inline asm in C works).
+- No `actool`/`ibtool`: no `.xcassets`, `.storyboard`, `.xib`.
 
-## Файлы
+## Files
 
 | | |
 |---|---|
-| `build-llvm.sh` | скачивает LLVM 22.1.8, собирает нативные tblgen и кросс-собирает clang/lld под iOS |
-| `ioscc.h`, `ioscc.cpp` | C-API: `ioscc_cc`, `ioscc_ld`, `ioscc_version` |
-| `make-toolchain.sh` | `out/toolchain`: заголовки clang, SDK без Swift и лишнего, `availability.c` из ipab |
-| `Makefile` | `out/libioscc.a` и `make toolchain` |
+| `build-llvm.sh` | downloads LLVM 22.1.8, builds native tblgen, cross-builds clang/lld for iOS |
+| `ioscc.h`, `ioscc.cpp` | C API: `ioscc_cc`, `ioscc_ld`, `ioscc_version` |
+| `make-toolchain.sh` | `out/toolchain`: clang headers, the SDK without Swift and extras, `availability.c` from ipab |
+| `Makefile` | `out/libioscc.a` and `make toolchain` |
 
-LLVM — Apache License 2.0 with LLVM Exceptions. iOS SDK в репозиторий не входит: он берётся из установленного
-ipab и попадает только в собранное приложение.
+LLVM is Apache License 2.0 with LLVM Exceptions. The iOS SDK is not part of this repository: it comes from the
+installed ipab and only ends up inside the built app.
